@@ -513,7 +513,7 @@ app.post("/api/admin/login", async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: "Login failed" });
   }
-}
+});
 
 // GET /api/admin/stats
 app.get("/api/admin/stats", adminAuth, async (req, res) => {

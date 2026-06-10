@@ -467,11 +467,52 @@ app.post("/api/whop-webhook", async (req, res) => {
 });
 
 // ─── ADMIN MIDDLEWARE ─────────────────────────────────────────────────────
-function adminAuth(req, res, next) {
-  const secret = req.headers["x-admin-secret"];
-  const ADMIN_SECRET = process.env.ADMIN_SECRET || "optramail-admin-2025";
-  if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
-  next();
+const jwt = require("jsonwebtoken");
+const Admin = require("./models/Admin");
+
+async function adminAuth(req, res, next) {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(403).json({ error: "Forbidden: No token provided" });
+    }
+    const token = authHeader.split(" ")[1];
+    const JWT_SECRET = process.env.ADMIN_SECRET || "optramail-admin-2025";
+    const decoded = jwt.verify(token, JWT_SECRET);
+    if (!decoded.adminId) throw new Error("Invalid token");
+    req.adminId = decoded.adminId;
+    next();
+  } catch (err) {
+    return res.status(403).json({ error: "Forbidden: Invalid or expired token" });
+  }
+}
+
+// POST /api/admin/login
+app.post("/api/admin/login", async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) return res.status(400).json({ error: "Email and password required" });
+
+    // Auto-create default admin if no admins exist
+    const adminCount = await Admin.countDocuments();
+    if (adminCount === 0) {
+      console.log("No admins found, creating default admin");
+      const defaultPassword = process.env.ADMIN_SECRET || "OptraMail@Admin2026";
+      await Admin.create({ email: "sonjoy.bairagee@gmail.com", password: defaultPassword });
+    }
+
+    const admin = await Admin.findOne({ email });
+    if (!admin) return res.status(401).json({ error: "Invalid credentials" });
+
+    const isMatch = await admin.comparePassword(password);
+    if (!isMatch) return res.status(401).json({ error: "Invalid credentials" });
+
+    const JWT_SECRET = process.env.ADMIN_SECRET || "optramail-admin-2025";
+    const token = jwt.sign({ adminId: admin._id }, JWT_SECRET, { expiresIn: "7d" });
+    res.json({ ok: true, token });
+  } catch (err) {
+    res.status(500).json({ error: "Login failed" });
+  }
 }
 
 // GET /api/admin/stats

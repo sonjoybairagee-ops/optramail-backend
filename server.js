@@ -34,6 +34,17 @@ app.options("*", cors()); // preflight
 app.use(express.json());
 app.use(requestIp.mw());
 
+// ✅ Ensure DB is connected for serverless
+app.use(async (req, res, next) => {
+  try {
+    await connectDB();
+    next();
+  } catch (err) {
+    console.error("DB Connection Error:", err);
+    res.status(500).json({ error: "Database connection failed" });
+  }
+});
+
 app.get("/", (req, res) => {
   res.send("OptraMail Tracker Server is running! (Mongoose Version)");
 });
